@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-s2^quq2amqsvzvk^5tr&!n+bd2n03rmh(4o@z5)p7$i68sdb18'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-s2^quq2amqsvzvk^5tr&!n+bd2n03rmh(4o@z5)p7$i68sdb18')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -77,13 +77,26 @@ WSGI_APPLICATION = 'reai.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ['DATABASE_URL'],
-        conn_max_age=600,
-        ssl_require=True
-    )
-}
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL and not any(placeholder in DATABASE_URL for placeholder in ['[YOUR_PASSWORD]', '[YOUR_PROJECT_REF]']):
+    # Use Supabase database if DATABASE_URL is properly configured
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
+    }
+else:
+    # Fallback configuration for development (SQLite)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
