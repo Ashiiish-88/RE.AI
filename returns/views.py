@@ -4,18 +4,30 @@ from django.utils import timezone
 from .models import ReturnRequest, ReturnAction
 from .forms import ReturnActionForm
 
-# Dashboard: List all pending returns
 class ReturnRequestListView(ListView):
     model = ReturnRequest
     template_name = 'returns/dashboard.html'
-    context_object_name = 'returns'
+    context_object_name = 'returns'  # Not used, but required by ListView
 
     def get_queryset(self):
-        return ReturnRequest.objects.filter(status='Pending').select_related(
-            'product', 'reason', 'predicted_action', 'final_action'
-        ).order_by('-created_at')
+        # Not used, as we pass custom querysets in get_context_data
+        return ReturnRequest.objects.none()
 
-# Detail: View and process a single return
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Manual review: needs staff attention
+        context['manual_returns'] = ReturnRequest.objects.filter(
+            manual_review_flag=True, auto_processed=False
+        ).select_related('product', 'reason', 'predicted_action', 'final_action', 'recommended_store').order_by('-created_at')
+        # Automated: handled by automation
+        context['automated_returns'] = ReturnRequest.objects.filter(
+            auto_processed=True
+        ).select_related('product', 'reason', 'predicted_action', 'final_action', 'recommended_store').order_by('-created_at')
+        # For analytics cards (optional)
+        context['manual_review_count'] = context['manual_returns'].count()
+        context['auto_processed_count'] = context['automated_returns'].count()
+        return context
+
 class ReturnRequestDetailView(UpdateView):
     model = ReturnRequest
     form_class = ReturnActionForm
@@ -32,11 +44,9 @@ class ReturnRequestDetailView(UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # If you have images related_name='images'
         context['images'] = self.object.images.all() if hasattr(self.object, 'images') else []
         return context
 
-# Analytics: Show stats for actions taken
 class ReturnStatsView(TemplateView):
     template_name = 'returns/return_stats.html'
 
