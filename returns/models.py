@@ -11,14 +11,14 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
     description = models.TextField(blank=True)
     brand = models.CharField(max_length=100, blank=True)
-    item_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Added
+    item_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
 class Store(models.Model):
     name = models.CharField(max_length=255)
     location = models.CharField(max_length=255)
     code = models.CharField(max_length=50, unique=True)
-    current_inventory = models.IntegerField(null=True, blank=True)  # Added
-    forecasted_sales = models.FloatField(null=True, blank=True)     # Added
+    current_inventory = models.IntegerField(null=True, blank=True)
+    forecasted_sales = models.FloatField(null=True, blank=True)
 
 class ReturnAction(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -56,20 +56,15 @@ class ReturnRequest(models.Model):
     final_action_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='pending')
     auto_processed = models.BooleanField(default=False)
-    auto_action_type = models.CharField(max_length=30, null=True, blank=True)  # e.g., 'restock', 'refurbish'
-    recommended_store = models.ForeignKey('Store', null=True, blank=True, on_delete=models.SET_NULL)
+    auto_action_type = models.CharField(max_length=30, null=True, blank=True)
+    recommended_store = models.ForeignKey('Store', null=True, blank=True, on_delete=models.SET_NULL, related_name='recommended_returns')
     manual_review_flag = models.BooleanField(default=False)
     manual_review_reason = models.TextField(null=True, blank=True)
-    # Optional for future:
     refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     exchange_date = models.DateField(null=True, blank=True)
     invoice_number = models.CharField(max_length=50, null=True, blank=True)
-
-    # AI/Forecasting fields
     resale_probability_score = models.FloatField(null=True, blank=True)
-    manual_review_flag = models.BooleanField(default=False)
     image_quality_score = models.FloatField(null=True, blank=True)
-    recommended_store = models.ForeignKey(Store, on_delete=models.SET_NULL, null=True, blank=True, related_name='recommended_returns')
     channel_fit = models.CharField(
         max_length=20,
         choices=[('online', 'Online'), ('offline', 'Offline'), ('both', 'Both')],
@@ -78,7 +73,7 @@ class ReturnRequest(models.Model):
     demand_score = models.FloatField(null=True, blank=True)
     forecasted_sales = models.FloatField(null=True, blank=True)
     logistics_cost = models.FloatField(null=True, blank=True)
-    item_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # For economic feasibility
+    item_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
 class ReturnImage(models.Model):
     return_request = models.ForeignKey(ReturnRequest, on_delete=models.CASCADE, related_name='images')
@@ -97,3 +92,40 @@ class ReturnStatusHistory(models.Model):
     changed_by = models.ForeignKey(get_user_model(), on_delete=models.SET_NULL, null=True, blank=True)
     changed_at = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)
+
+# --- MAPPING MODELS ---
+
+class ProductMapping(models.Model):
+    app_product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    csv_product_id = models.IntegerField()
+    csv_product_name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.app_product.name} ↔ {self.csv_product_name} ({self.csv_product_id})"
+
+class StoreMapping(models.Model):
+    app_store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    csv_store_location = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.app_store.name} ↔ {self.csv_store_location}"
+
+# --- DEMAND TABLE (from CSV) ---
+
+class ProductDemand(models.Model):
+    product_id = models.IntegerField()
+    product_name = models.CharField(max_length=255)
+    store_location = models.CharField(max_length=255)
+    demand = models.FloatField()
+    product_price = models.FloatField()
+    cost_price = models.FloatField()
+    logistics_cost_per_unit = models.FloatField()
+    profit_margin = models.FloatField()
+    profit_margin_pct = models.FloatField()
+    # Add more fields if you need them for analytics
+
+    class Meta:
+        unique_together = ('product_id', 'store_location')
+
+    def __str__(self):
+        return f"{self.product_name} at {self.store_location}"

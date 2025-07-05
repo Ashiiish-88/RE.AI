@@ -135,7 +135,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [
-    BASE_DIR / "static",  # if you have a project-level static folder
+    BASE_DIR / "returns/static",  # if you have a project-level static folder
 ]
 
 # Default primary key field type
