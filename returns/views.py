@@ -1,6 +1,7 @@
 from django.views.generic import ListView, UpdateView, TemplateView
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.core.cache import cache
 from .models import ReturnRequest, ReturnAction, Product, Store, ReturnReason
 from .forms import ReturnActionForm
 
@@ -10,129 +11,280 @@ import datetime
 import numpy as np
 import random
 
-# --- Manual classifier mapping for reasons ---
-REASON_CLASSIFICATION = {
-    1: 'recycle',   # Defective Item
-    2: 'restock',   # Wrong Size
-    3: 'restock',   # Unwanted
-    4: 'restock',   # Late Delivery
-    5: 'refurbish', # Damaged Packaging
-    6: 'recycle',   # Defective
-    7: 'restock',   # Wrong Item
-    8: 'restock',   # Changed Mind
-    9: 'refurbish', # Damaged
-}
+# Cache key for models
+MODEL_CACHE_KEY = 'ml_models_cache'
+MODEL_CACHE_TIMEOUT = 3600  # 1 hour
 
-def run_demand_and_profit_models(product_id, store_location, date_str):
-    import os
-    import joblib
-    import datetime
-    import numpy as np
+def load_ml_models():
+    """Load ML models with caching"""
+    models = cache.get(MODEL_CACHE_KEY)
+    
+    if models is None:
+        print("[CACHE] Loading ML models from disk...")
+        BASE_DIR = os.path.dirname(__file__)
+        MODELS_DIR = os.path.join(BASE_DIR, 'models')
+        
+        try:
+            models = {
+                'demand_model': joblib.load(os.path.join(MODELS_DIR, 'demand_model.pkl')),
+                'profit_model': joblib.load(os.path.join(MODELS_DIR, 'profit_model.pkl')),
+                'feature_columns': joblib.load(os.path.join(MODELS_DIR, 'feature_columns.pkl')),
+                'label_encoders': joblib.load(os.path.join(MODELS_DIR, 'label_encoders.pkl')),
+                'scaler': joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
+            }
+            
+            cache.set(MODEL_CACHE_KEY, models, MODEL_CACHE_TIMEOUT)
+            print(f"[CACHE] Models loaded and cached for {MODEL_CACHE_TIMEOUT} seconds")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to load models: {e}")
+            return None
+    else:
+        print("[CACHE] Using cached ML models")
+    
+    return models
 
-    BASE_DIR = os.path.dirname(__file__)
-    MODELS_DIR = os.path.join(BASE_DIR, 'models')
-    print(f"[INFO] Loading models from: {MODELS_DIR}")
+def run_demand_and_profit_models(product_id, current_store_location, date_str):
+    """Optimized ML model prediction with caching and proper input handling"""
+    
+    print(f"\n[🎯 PREDICTION] ========== PROCESSING REQUEST ==========")
+    print(f"[📝 INPUT] Product ID: {product_id}")
+    print(f"[📍 INPUT] Current Store: {current_store_location}")
+    print(f"[📅 INPUT] Date: {date_str}")
 
-    demand_model = joblib.load(os.path.join(MODELS_DIR, 'demand_model.pkl'))
-    profit_model = joblib.load(os.path.join(MODELS_DIR, 'profit_model.pkl'))
-    feature_columns = joblib.load(os.path.join(MODELS_DIR, 'feature_columns.pkl'))
-    label_encoders = joblib.load(os.path.join(MODELS_DIR, 'label_encoders.pkl'))
-    scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
+    # Load models with caching
+    models = load_ml_models()
+    if models is None:
+        return 0, current_store_location, -100, "Error: Models unavailable"
 
-    print(f"[INFO] feature_columns: {feature_columns}")
-    print(f"[INFO] label_encoders keys: {list(label_encoders.keys())}")
+    # Extract models from cache
+    demand_model = models['demand_model']
+    profit_model = models['profit_model'] 
+    feature_columns = models['feature_columns']
+    label_encoders = models['label_encoders']
+    scaler = models['scaler']
+    
+    print(f"[🧠 MODEL] Features required: {len(feature_columns)}")
+    
+    # Get product details for realistic pricing
+    try:
+        product = Product.objects.get(id=product_id)
+        product_price = float(product.item_value) if product.item_value else 29.99
+        print(f"[🛍️ PRODUCT] {product.name} (${product_price:.2f})")
+    except Product.DoesNotExist:
+        print(f"[❌ ERROR] Product ID {product_id} not found")
+        return 0, current_store_location, -100, "Error: Product not found"
 
-    features = {}
-    for col in feature_columns:
-        if col == 'product_id':
-            features[col] = product_id
-        elif col == 'store_location_encoded':
-            # Use the correct encoder key
-            features[col] = label_encoders['store_location'].transform([store_location])[0]
-        elif col == 'product_name_encoded':
-            product_name = 'Product_{}'.format(product_id)
-            if product_name not in label_encoders['product_name'].classes_:
-                print(f"[WARNING] {product_name} not in label encoder classes, using default.")
-            product_name = label_encoders['product_name'].classes_[0]
-            features[col] = label_encoders['product_name'].transform([product_name])[0]
-        elif col == 'aisle_encoded':
-            features[col] = label_encoders['aisle'].transform(['Aisle_1'])[0]  # Replace as needed
-        elif col == 'department_encoded':
-            features[col] = label_encoders['department'].transform(['Department_1'])[0]  # Replace as needed
-        elif col == 'distribution_center_encoded':
-            features[col] = label_encoders['distribution_center'].transform(['DC_1'])[0]  # Replace as needed
-        elif col == 'date':
-            features[col] = datetime.datetime.strptime(date_str, "%Y-%m-%d").toordinal()
-        elif col == 'hour':
-            features[col] = 12  # or extract from date/time if you have it
-        elif col == 'day_of_week':
-            features[col] = 1   # or extract from date
-        elif col == 'month':
-            features[col] = 7   # or extract from date
-        elif col == 'is_weekend':
-            features[col] = 0   # or calculate from date
-        elif col == 'product_price':
-            features[col] = 100 # or get from your Product model
-        elif col == 'cost_price':
-            features[col] = 80  # or get from your Product model
-        else:
-            features[col] = 0   # default for any other feature
+    # Parse date
+    try:
+        date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        print(f"[❌ ERROR] Invalid date format")
+        return 0, current_store_location, -100, "Error: Invalid date"
 
-    print(f"[DEBUG] Features after encoding: {features}")
+    # Get valid stores for prediction
+    all_stores = Store.objects.all().values_list('location', flat=True)
+    valid_stores = [s for s in all_stores if s in label_encoders['store_location'].classes_]
+    print(f"[🏪 STORES] Testing {len(valid_stores)} valid stores")
 
-    X = np.array([[features[col] for col in feature_columns]])
-    print(f"[DEBUG] X shape: {X.shape}, X: {X}")
+    best_store = current_store_location
+    best_profit = -999999
+    best_demand = 0
+    results = []
 
-    X_scaled = scaler.transform(X)
-    print(f"[DEBUG] X_scaled: {X_scaled}")
-
-    demand = float(demand_model.predict(X_scaled)[0])
-    profit = float(profit_model.predict(X_scaled)[0])
-    best_store = store_location
-
-    print(f"[RESULT] Demand: {demand}, Profit: {profit}, Best Store: {best_store}")
-
-    return demand, best_store, profit
+    # Test each store
+    for i, store_location in enumerate(valid_stores):
+        try:
+            print(f"\n[🔄 {i+1}/{len(valid_stores)}] Testing: {store_location}")
+            
+            # Build complete feature vector for DEMAND model (25 features)
+            demand_features = {}
+            
+            # Core features
+            demand_features['product_id'] = int(product_id)
+            demand_features['product_price'] = product_price
+            demand_features['cost_price'] = product_price * 0.75  # 75% of retail
+            
+            # Date features
+            demand_features['hour'] = 14  # 2 PM
+            demand_features['day_of_week'] = date_obj.weekday()
+            demand_features['week'] = date_obj.isocalendar()[1]
+            demand_features['month'] = date_obj.month
+            demand_features['day_of_month'] = date_obj.day
+            demand_features['quarter'] = (date_obj.month - 1) // 3 + 1
+            demand_features['is_weekend'] = 1 if date_obj.weekday() >= 5 else 0
+            demand_features['is_morning'] = 0
+            demand_features['is_evening'] = 0
+            
+            # Lag features (historical demand)
+            demand_features['demand_lag_1'] = 12
+            demand_features['demand_lag_2'] = 11  
+            demand_features['demand_lag_3'] = 13
+            demand_features['demand_lag_7'] = 15
+            demand_features['demand_lag_14'] = 18
+            
+            # Business features
+            demand_features['unique_customers'] = 42
+            demand_features['distance_miles'] = 38.5
+            demand_features['logistics_cost_per_unit'] = 4.25
+            
+            # Categorical encodings
+            product_name = f'Product_{product_id}'
+            if product_name in label_encoders['product_name'].classes_:
+                demand_features['product_name_encoded'] = label_encoders['product_name'].transform([product_name])[0]
+            else:
+                demand_features['product_name_encoded'] = 0  # Default encoding
+                
+            demand_features['aisle_encoded'] = label_encoders['aisle'].transform(['Aisle_1'])[0]
+            demand_features['department_encoded'] = label_encoders['department'].transform(['Department_1'])[0]
+            demand_features['store_location_encoded'] = label_encoders['store_location'].transform([store_location])[0]
+            demand_features['distribution_center_encoded'] = label_encoders['distribution_center'].transform(['Atlanta_GA'])[0]
+            
+            # Create and scale feature vector for DEMAND prediction
+            X_demand = np.array([[demand_features.get(col, 0) for col in feature_columns]])
+            X_demand_scaled = scaler.transform(X_demand)
+            
+            # Predict DEMAND first
+            predicted_demand = float(demand_model.predict(X_demand_scaled)[0])
+            
+            # Now build feature vector for PROFIT model (9 features)
+            profit_features = {
+                'predicted_demand': predicted_demand,
+                'distance_miles': demand_features['distance_miles'],
+                'product_id': demand_features['product_id'],
+                'store_location_encoded': demand_features['store_location_encoded'],
+                'distribution_center_encoded': demand_features['distribution_center_encoded'],
+                'hour': demand_features['hour'],
+                'day_of_week': demand_features['day_of_week'],
+                'month': demand_features['month'],
+                'is_weekend': demand_features['is_weekend']
+            }
+            
+            # Profit model feature order
+            profit_feature_order = ['predicted_demand', 'distance_miles', 'product_id', 'store_location_encoded',
+                                  'distribution_center_encoded', 'hour', 'day_of_week', 'month', 'is_weekend']
+            
+            # Create feature vector for PROFIT prediction
+            X_profit = np.array([[profit_features[col] for col in profit_feature_order]])
+            
+            # Predict PROFIT (no scaling needed for profit model)
+            predicted_profit = float(profit_model.predict(X_profit)[0])
+            
+            results.append({
+                'store': store_location,
+                'demand': predicted_demand,
+                'profit': predicted_profit
+            })
+            
+            print(f"[📊 RESULT] Demand: {predicted_demand:.2f}, Profit: ${predicted_profit:.2f}")
+            
+            if predicted_profit > best_profit:
+                best_profit = predicted_profit
+                best_store = store_location
+                best_demand = predicted_demand
+                print(f"[🏆 NEW BEST] {store_location}")
+                
+        except Exception as e:
+            print(f"[❌ ERROR] {store_location}: {str(e)}")
+            continue
+    
+    # Final results
+    results.sort(key=lambda x: x['profit'], reverse=True)
+    top_stores = results[:3]  # Get top 3 recommendations
+    
+    print(f"\n[🎯 FINAL RESULTS]")
+    print(f"[🏆 BEST] Store: {best_store}")
+    print(f"[📈 DEMAND] {best_demand:.2f}")
+    print(f"[💰 PROFIT] ${best_profit:.2f}")
+    print(f"[📊 TOP 3] {[(r['store'], r['profit']) for r in top_stores]}")
+    
+    classification = "profitable_transfer" if best_profit > 0 else "keep_current"
+    
+    return best_demand, best_store, best_profit, classification, top_stores
 
 def return_form(request):
-    products = Product.objects.all()
+    """Main form view with ML integration and caching"""
+    products = Product.objects.all().order_by('name')
     reasons = ReturnReason.objects.all()
-    stores = Store.objects.all()
-    today = timezone.now().date().isoformat()
+    stores = Store.objects.all().order_by('name')
+    
+    # Date constraints based on training data (2023-01-01 to 2023-12-30)
+    min_date = "2023-01-01"
+    max_date = "2023-12-30"
+    default_date = "2023-06-15"  # Middle of the range for better predictions
+    
     classification = None
     demand_result = None
     invoice_number = None
 
     if request.method == 'POST':
-        reason_id = int(request.POST.get('reason'))
-        classification = REASON_CLASSIFICATION.get(reason_id, 'refurbish')
+        # Get form data
         product_id = int(request.POST.get('product_id'))
-        store_location = request.POST.get('location')
+        current_store_location = request.POST.get('location')
         date = request.POST.get('date')
-    
-        # Defensive: ensure store_location is in the encoder's classes
-        if store_location not in label_encoders['store_location'].classes_:
-            print(f"[WARNING] {store_location} not in label encoder classes, using default.")
-            store_location = label_encoders['store_location'].classes_[0]
-        print(label_encoders['store_location'].classes_)
 
+        print(f"\n[FORM INPUT] ========== NEW RETURN REQUEST ==========")
+        print(f"[FORM INPUT] Product ID: {product_id}")
+        print(f"[FORM INPUT] Current Store Location: {current_store_location}")
+        print(f"[FORM INPUT] Date: {date}")
+        print(f"[FORM INPUT] ============================================")
 
-        if classification == 'restock' and store:
-            demand, best_store, profit = run_demand_and_profit_models(product_id, store_location, date)
-            demand_result = {
-                'demand': round(demand, 2),
-                'best_store': best_store,
-                'profit': round(profit, 2),
-                'threshold_passed': demand > 4 and profit > 0
-            }
-            if demand_result['threshold_passed']:
-                invoice_number = f"INV-{random.randint(10000,99999)}"
+        # Validate date is within training data range
+        try:
+            input_date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+            min_date_obj = datetime.datetime.strptime(min_date, "%Y-%m-%d").date()
+            max_date_obj = datetime.datetime.strptime(max_date, "%Y-%m-%d").date()
+            
+            if input_date < min_date_obj or input_date > max_date_obj:
+                print(f"[WARNING] Date {date} is outside training range {min_date} to {max_date}")
+                # Still process but log the warning
+        except ValueError:
+            print(f"[ERROR] Invalid date format: {date}")
+
+        # Run ML model to get predictions and classification
+        demand, best_store, profit, classification, top_stores = run_demand_and_profit_models(
+            product_id, current_store_location, date
+        )
+        
+        print(f"[ML OUTPUT] Classification: {classification}")
+        print(f"[ML OUTPUT] Demand: {demand}")
+        print(f"[ML OUTPUT] Best Store: {best_store}")
+        print(f"[ML OUTPUT] Profit: ${profit}")
+        
+        # Determine recommendation based on profit
+        if profit > 0:
+            recommendation = f"Transfer to {best_store}"
+            recommendation_type = "transfer"
+            print(f"[RECOMMENDATION] Transfer recommended - Profit: ${profit}")
+        else:
+            recommendation = "Keep in same store"
+            recommendation_type = "keep"
+            best_store = current_store_location
+            print(f"[RECOMMENDATION] Keep in same store - Profit would be negative: ${profit}")
+        
+        demand_result = {
+            'demand': round(demand, 2),
+            'best_store': best_store,
+            'current_store': current_store_location,
+            'profit': round(profit, 2),
+            'recommendation': recommendation,
+            'recommendation_type': recommendation_type,
+            'threshold_passed': demand > 4 and profit > 0,
+            'classification': classification,
+            'top_stores': top_stores
+        }
+        
+        if demand_result['threshold_passed']:
+            invoice_number = f"INV-{random.randint(10000,99999)}"
+            print(f"[INVOICE] Generated invoice: {invoice_number}")
 
         return render(request, 'returns/form.html', {
             'products': products,
             'reasons': reasons,
             'stores': stores,
-            'today': today,
+            'min_date': min_date,
+            'max_date': max_date,
+            'default_date': default_date,
             'classification': classification,
             'submitted': True,
             'demand_result': demand_result,
@@ -143,18 +295,22 @@ def return_form(request):
         'products': products,
         'reasons': reasons,
         'stores': stores,
-        'today': today,
+        'min_date': min_date,
+        'max_date': max_date,
+        'default_date': default_date,
     })
 
 def staff_login(request):
+    """Simple staff login view"""
     if request.method == 'POST':
         return redirect('returns:return_form')
     return render(request, 'returns/login.html')
 
 class ReturnRequestListView(ListView):
+    """Dashboard view for return requests"""
     model = ReturnRequest
     template_name = 'returns/dashboard.html'
-    context_object_name = 'returns'  # Not used, but required by ListView
+    context_object_name = 'returns'
 
     def get_queryset(self):
         return ReturnRequest.objects.none()
@@ -172,6 +328,7 @@ class ReturnRequestListView(ListView):
         return context
 
 class ReturnRequestDetailView(UpdateView):
+    """Detail view for individual return requests"""
     model = ReturnRequest
     form_class = ReturnActionForm
     template_name = 'returns/return_detail.html'
@@ -191,6 +348,7 @@ class ReturnRequestDetailView(UpdateView):
         return context
 
 class ReturnStatsView(TemplateView):
+    """Statistics view for return actions"""
     template_name = 'returns/return_stats.html'
 
     def get_context_data(self, **kwargs):
