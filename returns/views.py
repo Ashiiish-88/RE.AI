@@ -47,36 +47,35 @@ def run_demand_and_profit_models(product_id, store_location, date_str):
         if col == 'product_id':
             features[col] = product_id
         elif col == 'store_location_encoded':
-            # Use the correct encoder key
             features[col] = label_encoders['store_location'].transform([store_location])[0]
         elif col == 'product_name_encoded':
             product_name = 'Product_{}'.format(product_id)
             if product_name not in label_encoders['product_name'].classes_:
                 print(f"[WARNING] {product_name} not in label encoder classes, using default.")
-            product_name = label_encoders['product_name'].classes_[0]
+                product_name = label_encoders['product_name'].classes_[0]
             features[col] = label_encoders['product_name'].transform([product_name])[0]
         elif col == 'aisle_encoded':
-            features[col] = label_encoders['aisle'].transform(['Aisle_1'])[0]  # Replace as needed
+            features[col] = label_encoders['aisle'].transform(['Aisle_1'])[0]
         elif col == 'department_encoded':
-            features[col] = label_encoders['department'].transform(['Department_1'])[0]  # Replace as needed
+            features[col] = label_encoders['department'].transform(['Department_1'])[0]
         elif col == 'distribution_center_encoded':
-            features[col] = label_encoders['distribution_center'].transform(['DC_1'])[0]  # Replace as needed
+            features[col] = label_encoders['distribution_center'].transform(['DC_1'])[0]
         elif col == 'date':
             features[col] = datetime.datetime.strptime(date_str, "%Y-%m-%d").toordinal()
         elif col == 'hour':
-            features[col] = 12  # or extract from date/time if you have it
+            features[col] = 12
         elif col == 'day_of_week':
-            features[col] = 1   # or extract from date
+            features[col] = 1
         elif col == 'month':
-            features[col] = 7   # or extract from date
+            features[col] = 7
         elif col == 'is_weekend':
-            features[col] = 0   # or calculate from date
+            features[col] = 0
         elif col == 'product_price':
-            features[col] = 100 # or get from your Product model
+            features[col] = 100
         elif col == 'cost_price':
-            features[col] = 80  # or get from your Product model
+            features[col] = 80
         else:
-            features[col] = 0   # default for any other feature
+            features[col] = 0
 
     print(f"[DEBUG] Features after encoding: {features}")
 
@@ -109,15 +108,14 @@ def return_form(request):
         product_id = int(request.POST.get('product_id'))
         store_location = request.POST.get('location')
         date = request.POST.get('date')
-    
+
         # Defensive: ensure store_location is in the encoder's classes
         if store_location not in label_encoders['store_location'].classes_:
             print(f"[WARNING] {store_location} not in label encoder classes, using default.")
             store_location = label_encoders['store_location'].classes_[0]
         print(label_encoders['store_location'].classes_)
 
-
-        if classification == 'restock' and store:
+        if classification == 'restock':
             demand, best_store, profit = run_demand_and_profit_models(product_id, store_location, date)
             demand_result = {
                 'demand': round(demand, 2),
