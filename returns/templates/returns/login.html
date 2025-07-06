@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load static %}
+<head>
+    <meta charset="UTF-8">
+    <title>Staff Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
+        <div class="flex justify-center mb-6">
+            <img src="{% static 'images/logo-removebg-preview.png' %}" alt="Logo" class="h-28">
+        </div>
+        <h2 class="text-2xl font-bold mb-6 text-center text-blue-700">Staff Login</h2>
+        <form method="post" action="{% url 'returns:staff_login' %}">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Staff ID</label>
+                <input type="text" name="staff_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                <input type="password" name="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">Login</button>
+        </form>
+    </div>
+</body>
+</html>

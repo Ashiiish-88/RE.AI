@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load static %}
+<head>
+    <meta charset="UTF-8">
+    <title>Return Form</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navbar with logo only -->
+    <nav class="bg-white shadow-lg border-b-2 border-blue-500">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <img src="{% static 'images/logo-removebg-preview.png' %}" alt="RE.AI Logo" class="h-28 w-28">
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="flex items-center justify-center py-10">
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-lg">
+            <h2 class="text-2xl font-bold mb-6 text-center text-green-700">Return Form</h2>
+
+            {% if submitted %}
+                <div class="mb-6 p-4 rounded bg-blue-100 text-blue-800 text-center font-semibold">
+                    Classified Action: {{ classification|title }}
+                    {% if classification == "restock" and demand_result %}
+                        <div class="mt-2">
+                            <div>Demand Score: {{ demand_result.demand }}</div>
+                            <div>Best Store: {{ demand_result.best_store }}</div>
+                            <div>Profit: ${{ demand_result.profit }}</div>
+                            {% if demand_result.threshold_passed %}
+                                <div class="mt-2 text-green-700 font-bold">Threshold Passed! Invoice Generated: {{ invoice_number }}</div>
+                            {% else %}
+                                <div class="mt-2 text-red-700 font-bold">Threshold Not Met. No Invoice Generated.</div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'returns:return_form' %}">
+                {% csrf_token %}
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Product Name</label>
+                    <input type="text" name="product_name" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Product ID</label>
+                    <select name="product_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+                        {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.id }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Reason for Return</label>
+                    <select name="reason" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+                        {% for reason in reasons %}
+                            <option value="{{ reason.id }}">{{ reason.reason }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Date</label>
+                    <input type="date" name="date" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" value="{{ today }}" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Location</label>
+                    <select name="location" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+                        {% for store in stores %}
+                            <option value="{{ store.location }}">{{ store.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">Submit</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

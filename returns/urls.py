@@ -7,4 +7,6 @@ urlpatterns = [
     path('', views.ReturnRequestListView.as_view(), name='return_list'),
     path('<int:pk>/', views.ReturnRequestDetailView.as_view(), name='return_detail'),
     path('stats/', views.ReturnStatsView.as_view(), name='return_stats'),
+    path('staff-login/', views.staff_login, name='staff_login'),
+    path('return-form/', views.return_form, name='return_form'),
 ]
