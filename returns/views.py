@@ -1,15 +1,23 @@
 from django.views.generic import ListView, UpdateView, TemplateView
-from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.core.cache import cache
 from .models import ReturnRequest, ReturnAction, Product, Store, ReturnReason
 from .forms import ReturnActionForm
+from django.views.decorators.http import require_GET, require_POST
+from django.shortcuts import render, redirect, get_object_or_404
+from django.core.management import call_command
+from returns.management.commands.automate_returns import mock_demand_model
+from django.template.loader import render_to_string
+from django.http import JsonResponse, Http404
+from datetime import date
+
 
 import os
 import joblib
 import datetime
 import numpy as np
 import random
+
 
 # Cache key for models
 MODEL_CACHE_KEY = 'ml_models_cache'
@@ -360,3 +368,87 @@ class ReturnStatsView(TemplateView):
             stats.append({'action': action.name, 'count': count})
         context['stats'] = stats
         return context
+
+
+@require_GET
+def dashboard(request):
+    pending_requests = ReturnRequest.objects.filter(status='pending').order_by('-created_at')
+    manual_returns = ReturnRequest.objects.filter(
+        manual_review_flag=True, auto_processed=False
+    ).order_by('-created_at')
+    automated_returns = ReturnRequest.objects.filter(
+        auto_processed=True
+    ).order_by('-created_at')
+    manual_review_count = manual_returns.count()
+    auto_processed_count = automated_returns.count()
+    rejected_count = ReturnRequest.objects.filter(status='rejected').count()
+    return render(request, 'returns/dashboard.html', {
+        'pending_requests': pending_requests,
+        'manual_review_count': manual_review_count,
+        'auto_processed_count': auto_processed_count,
+        'rejected_count': rejected_count,
+    })
+
+@require_GET
+def automated_orders(request):
+    automated_returns = ReturnRequest.objects.filter(auto_processed=True).order_by('-created_at')
+    return render(request, 'returns/automated_orders.html', {
+        'automated_returns': automated_returns,
+    })
+
+@require_GET
+def manual_review(request):
+    manual_returns = ReturnRequest.objects.filter(manual_review_flag=True).order_by('-created_at')
+    return render(request, 'returns/manual_review.html', {
+        'manual_returns': manual_returns,
+    })
+
+@require_POST
+def process_all(request):
+    call_command('automate_returns')
+    return redirect('returns:dashboard')
+
+@require_POST
+def manual_review_decision(request, request_id):
+    r = get_object_or_404(ReturnRequest, pk=request_id)
+    final_action = request.POST.get('final_action')
+    staff_note = request.POST.get('staff_note', '')
+    r.final_action = ReturnAction.objects.filter(name__iexact=final_action).first()
+    r.status = 'reviewed'
+    r.manual_review_flag = False
+    r.manual_review_reason = staff_note
+    r.save()
+    return redirect('returns:manual_review')
+
+@require_GET
+def invoice_modal(request, request_id):
+    """
+    Returns invoice details for a ReturnRequest as HTML (for modal display).
+    Uses mock_demand_model to get profit and shipping location.
+    """
+    try:
+        r = ReturnRequest.objects.select_related('product', 'store').get(pk=request_id)
+    except ReturnRequest.DoesNotExist:
+        raise Http404("ReturnRequest not found")
+
+    # Generate a random invoice id for demonstration
+    random_invoice_id = f"INV-{random.randint(100000, 999999)}"
+
+    # Use mock_demand_model to get profit and best_store (shipping location)
+    # Use today's date if created_at is missing
+    created_date = r.created_at.date() if r.created_at else date.today()
+    demand, best_store, profit = mock_demand_model(
+        r.product.id,
+        r.store.location if r.store else "Unknown",
+        created_date
+    )
+
+    # Render a template fragment for the modal
+    html = render_to_string('returns/invoice_modal.html', {
+        'invoice_id': random_invoice_id,
+        'product_name': r.product.name,
+        'shipping_location': best_store,
+        'profit': profit,
+    }, request=request)
+
+    return JsonResponse({'html': html})

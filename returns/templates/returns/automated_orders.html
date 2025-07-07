@@ -1,0 +1,79 @@
+{% extends 'returns/base.html' %}
+{% load static %}
+
+{% block title %}Automated Orders - RE.AI{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto py-8">
+    <h1 class="text-2xl font-bold text-blue-700 mb-6">Automated Orders</h1>
+    <div class="bg-white rounded-lg shadow border">
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Store</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Demand Score</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for r in automated_returns %}
+                    <tr>
+                        <td class="px-3 py-4">{{ r.product.name }}</td>
+                        <td class="px-3 py-4">{{ r.store.location }}</td>
+                        <td class="px-3 py-4">{{ r.created_at|date:"Y-m-d" }}</td>
+                        <td class="px-3 py-4">
+                            <button onclick="showInvoiceModal('{{ r.id }}')" class="text-blue-600 underline hover:text-blue-800 transition">Invoice</button>
+                        </td>
+                        <td class="px-3 py-4">${{ r.profit }}</td>
+                        <td class="px-3 py-4">{{ r.demand_score }}</td>
+                        <td class="px-3 py-4">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Reviewed
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Invoice Modal Container -->
+<div id="invoice-modal" style="display:none;" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+    <div id="invoice-modal-content" class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full relative animate-fade-in"></div>
+</div>
+<style>
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(20px);}
+    to { opacity: 1; transform: translateY(0);}
+}
+.animate-fade-in {
+    animation: fade-in 0.3s ease;
+}
+</style>
+
+<script>
+function showInvoiceModal(requestId) {
+    fetch(`/invoice-modal/${requestId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('invoice-modal-content').innerHTML = data.html;
+            document.getElementById('invoice-modal').style.display = 'flex';
+        });
+}
+document.addEventListener('click', function(event) {
+    // Close modal when clicking outside the modal content
+    const modal = document.getElementById('invoice-modal');
+    const content = document.getElementById('invoice-modal-content');
+    if (modal.style.display === 'flex' && !content.contains(event.target) && event.target !== content) {
+        modal.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

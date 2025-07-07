@@ -21,36 +21,35 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Navigation Bar -->
-    <nav class="bg-white shadow-lg border-b-2 border-blue-500">
+    <nav class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <!-- Logo and Brand -->
                 <div class="flex items-center space-x-3">
-                    <img src="{% static 'images/logo-removebg-preview.png' %}" alt="RE.AI Logo" class="h-28 w-28">
-                    
+                    <img src="{% static 'images/logo-removebg-preview.png' %}" alt="RE.AI Logo" class="h-24 w-24">
                 </div>
                 
                 <!-- Navigation Links -->
                 <div class="hidden md:block">
                     <div class="ml-10 flex items-baseline space-x-8">
-                         <a href="{% url 'returns:return_list' %}" class="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            Dashboard
-        </a>
-        <a href="{% url 'returns:staff_login' %}" class="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            New Return
-        </a>
-        <a href="{% url 'returns:return_stats' %}" class="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            Analytics
-        </a>
-        <a href="#" class="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            Manual Review
-        </a>
+                        <a href="{% url 'returns:dashboard' %}" class="text-gray-700 hover:text-primary transition-colors duration-200 font-medium relative group">
+                            Dashboard
+                            <span class="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+                        </a>
+                        <a href="{% url 'returns:automated_orders' %}" class="text-gray-700 hover:text-primary transition-colors duration-200 font-medium relative group">
+                            Automated Orders
+                            <span class="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+                        </a>
+                        <a href="{% url 'returns:manual_review' %}" class="text-gray-700 hover:text-primary transition-colors duration-200 font-medium relative group">
+                            Manual Review
+                            <span class="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+                        </a>
                     </div>
                 </div>
                 
                 <!-- Mobile menu button -->
                 <div class="md:hidden">
-                    <button type="button" class="text-gray-600 hover:text-blue-600 focus:outline-none focus:text-blue-600" onclick="toggleMobileMenu()">
+                    <button type="button" class="text-gray-600 hover:text-primary focus:outline-none focus:text-primary" onclick="toggleMobileMenu()">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
@@ -61,19 +60,10 @@
         
         <!-- Mobile Navigation Menu -->
         <div id="mobile-menu" class="md:hidden hidden">
-            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-gray-50 border-t">
-                 <a href="{% url 'returns:return_list' %}" class="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            Dashboard
-        </a>
-        <a href="{% url 'returns:staff_login' %}" class="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            New Return
-        </a>
-        <a href="{% url 'returns:return_stats' %}" class="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            Analytics
-        </a>
-        <a href="#" class="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-            Manual Review
-        </a>
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t">
+                <a href="{% url 'returns:dashboard' %}" class="block py-2 px-4 text-gray-700 hover:text-primary font-medium transition-colors duration-200">Dashboard</a>
+                <a href="{% url 'returns:automated_orders' %}" class="block py-2 px-4 text-gray-700 hover:text-primary font-medium transition-colors duration-200">Automated Orders</a>
+                <a href="{% url 'returns:manual_review' %}" class="block py-2 px-4 text-gray-700 hover:text-primary font-medium transition-colors duration-200">Manual Review</a>
             </div>
         </div>
     </nav>

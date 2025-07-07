@@ -49,106 +49,34 @@
         </div>
     </div>
 
-    <!-- Manual Review Table -->
+    <!-- Pending Requests Table Card -->
     <div class="bg-white rounded-lg shadow-sm border w-full">
         <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-xl font-semibold text-yellow-700">Manual Review Needed</h2>
+            <h2 class="text-xl font-semibold text-blue-700">Pending Requests</h2>
         </div>
-        {% if manual_returns %}
-        <div class="overflow-x-auto" style="max-height: 15rem; overflow-y: auto;">
+        {% if pending_requests %}
+        <div class="overflow-x-auto overflow-y-auto" style="max-height: 18rem;">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50 sticky top-0">
                     <tr>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-0">Product</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Brand</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Category</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Date</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">AI Prediction</th>
-                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Files</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Store</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                    {% for r in manual_returns %}
-                    <tr class="hover:bg-gray-50 transition-colors duration-150">
-                        <td class="px-3 py-4 min-w-0">
-                            <div class="text-sm font-medium text-gray-900 truncate max-w-32" title="{{ r.product.name }}">
-                                {{ r.product.name }}
-                            </div>
-                            <div class="text-xs text-gray-500 md:hidden">
-                                {{ r.product.brand|default:"—" }}
-                            </div>
-                            <div class="text-xs text-gray-500 sm:hidden">
-                                {{ r.created_at|date:"M d" }}
-                            </div>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap hidden md:table-cell">
-                            <div class="text-sm text-gray-700 truncate max-w-24" title="{{ r.product.brand }}">
-                                {{ r.product.brand|default:"—" }}
-                            </div>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap hidden lg:table-cell">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate max-w-20" title="{{ r.product.category.name }}">
-                                {{ r.product.category.name|default:"—" }}
+                    {% for r in pending_requests %}
+                    <tr>
+                        <td class="px-3 py-4">{{ r.product.name }}</td>
+                        <td class="px-3 py-4">{{ r.store.location }}</td>
+                        <td class="px-3 py-4">{{ r.created_at|date:"Y-m-d" }}</td>
+                        <td class="px-3 py-4">{{ r.reason.reason }}</td>
+                        <td class="px-3 py-4">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Pending
                             </span>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
-                            {{ r.created_at|date:"M d, Y" }}
-                        </td>
-                        <td class="px-3 py-4 min-w-0">
-                            <div class="text-sm text-gray-900 truncate max-w-32" title="{{ r.reason.reason }}">
-                                {{ r.reason.reason|default:"—" }}
-                            </div>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap">
-                            {% if r.status|lower == 'pending' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                    Pending
-                                </span>
-                            {% elif r.status|lower == 'processed' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Processed
-                                </span>
-                            {% else %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                    {{ r.status|title }}
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap hidden xl:table-cell">
-                            {% if r.final_action %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 truncate max-w-20" title="{{ r.final_action.name }}">
-                                    {{ r.final_action.name }}
-                                </span>
-                            {% elif r.predicted_action %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate max-w-20" title="{{ r.predicted_action.name }}">
-                                    {{ r.predicted_action.name }}
-                                </span>
-                            {% else %}
-                                <span class="text-xs text-gray-400">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap text-center hidden lg:table-cell">
-                            {% with r.attachments.count as att_count %}
-                                {% if att_count > 0 %}
-                                    <a href="#" class="inline-flex items-center text-blue-600 hover:underline">
-                                        <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.586-6.586a4 4 0 10-5.656-5.656l-6.586 6.586"></path>
-                                        </svg>
-                                        {{ att_count }}
-                                    </a>
-                                {% else %}
-                                    <span class="text-gray-400">—</span>
-                                {% endif %}
-                            {% endwith %}
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                            <a href="{% url 'returns:return_detail' r.pk %}" 
-                               class="inline-flex items-center px-2 py-1 border border-transparent text-xs leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
-                                View
-                            </a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -156,126 +84,21 @@
             </table>
         </div>
         {% else %}
-        <div class="text-center py-12 text-yellow-600">No returns need manual review. 🎉</div>
+        <div class="text-center py-12 text-blue-600">No pending requests.</div>
         {% endif %}
     </div>
 
-    <!-- Automated Returns Table -->
-    <div class="bg-white rounded-lg shadow-sm border w-full">
-        <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-xl font-semibold text-green-700">Automated Returns</h2>
+    <!-- Process All Button OUTSIDE the card -->
+    {% if pending_requests %}
+    <form method="post" action="{% url 'returns:process_all' %}">
+        {% csrf_token %}
+        <div class="flex justify-end mt-4">
+            <button type="submit" class="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700 shadow">
+                Process All
+            </button>
         </div>
-        {% if automated_returns %}
-        <div class="overflow-x-auto" style="max-height: 15rem; overflow-y: auto;">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50 sticky top-0">
-                    <tr>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-0">Product</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Brand</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Category</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Date</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">AI Prediction</th>
-                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Files</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for r in automated_returns %}
-                    <tr class="hover:bg-gray-50 transition-colors duration-150">
-                        <td class="px-3 py-4 min-w-0">
-                            <div class="text-sm font-medium text-gray-900 truncate max-w-32" title="{{ r.product.name }}">
-                                {{ r.product.name }}
-                            </div>
-                            <div class="text-xs text-gray-500 md:hidden">
-                                {{ r.product.brand|default:"—" }}
-                            </div>
-                            <div class="text-xs text-gray-500 sm:hidden">
-                                {{ r.created_at|date:"M d" }}
-                            </div>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap hidden md:table-cell">
-                            <div class="text-sm text-gray-700 truncate max-w-24" title="{{ r.product.brand }}">
-                                {{ r.product.brand|default:"—" }}
-                            </div>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap hidden lg:table-cell">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate max-w-20" title="{{ r.product.category.name }}">
-                                {{ r.product.category.name|default:"—" }}
-                            </span>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
-                            {{ r.created_at|date:"M d, Y" }}
-                        </td>
-                        <td class="px-3 py-4 min-w-0">
-                            <div class="text-sm text-gray-900 truncate max-w-32" title="{{ r.reason.reason }}">
-                                {{ r.reason.reason|default:"—" }}
-                            </div>
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap">
-                            {% if r.status|lower == 'pending' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                    Pending
-                                </span>
-                            {% elif r.status|lower == 'processed' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Processed
-                                </span>
-                            {% else %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                    {{ r.status|title }}
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap hidden xl:table-cell">
-                            {% if r.final_action %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 truncate max-w-20" title="{{ r.final_action.name }}">
-                                    {{ r.final_action.name }}
-                                </span>
-                            {% elif r.predicted_action %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate max-w-20" title="{{ r.predicted_action.name }}">
-                                    {{ r.predicted_action.name }}
-                                </span>
-                            {% else %}
-                                <span class="text-xs text-gray-400">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap text-center hidden lg:table-cell">
-                            {% with r.attachments.count as att_count %}
-                                {% if att_count > 0 %}
-                                    <a href="#" class="inline-flex items-center text-blue-600 hover:underline">
-                                        <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.586-6.586a4 4 0 10-5.656-5.656l-6.586 6.586"></path>
-                                        </svg>
-                                        {{ att_count }}
-                                    </a>
-                                {% else %}
-                                    <span class="text-gray-400">—</span>
-                                {% endif %}
-                            {% endwith %}
-                        </td>
-                        <td class="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                            <a href="{% url 'returns:return_detail' r.pk %}" 
-                               class="inline-flex items-center px-2 py-1 border border-transparent text-xs leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
-                                View
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="text-center py-12 text-green-600">No automated returns yet.</div>
-        {% endif %}
-    </div>
+    </form>
+    {% endif %}
+
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-    // Add any dashboard-specific JavaScript here
-    console.log('Dashboard loaded');
-</script>
 {% endblock %}
