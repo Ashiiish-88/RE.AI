@@ -1,0 +1,3 @@
+ID_BASED_MODELS
+Features used: product_id, store_id, aisle_id, department_id, distribution_center_id
+NO name-based features to prevent data leakage
