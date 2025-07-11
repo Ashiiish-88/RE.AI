@@ -30,7 +30,7 @@ def train_all_models():
     print(f"Started at: {datetime.now()}")
     
     # Data paths
-    classification_data = "/Users/ommohite/Documents/RE.AI/data/product_classification_dataset.csv"
+    classification_data = "data/product_classification_dataset_realistic_with_id.csv"
     demand_data = "/Users/ommohite/Documents/RE.AI/data/train.csv"
     
     # Create models directory
@@ -111,7 +111,7 @@ def test_models():
     
     try:
         # Load sample data for testing
-        classification_data = pd.read_csv("/Users/ommohite/Documents/RE.AI/data/product_classification_dataset.csv")
+        classification_data = pd.read_csv("data/product_classification_dataset_realistic_with_id.csv")
         demand_data = pd.read_csv("/Users/ommohite/Documents/RE.AI/data/train.csv")
         
         # Test Classification Model

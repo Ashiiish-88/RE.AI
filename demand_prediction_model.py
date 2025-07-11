@@ -8,6 +8,17 @@ import joblib
 import os
 
 class DemandPredictor:
+    def load_model(self, model_dir='models'):
+        """Loads the trained model and associated processors from disk."""
+        import joblib
+        import os
+        self.model = joblib.load(os.path.join(model_dir, 'demand_predictor.pkl'))
+        self.scaler = joblib.load(os.path.join(model_dir, 'demand_scaler.pkl'))
+        self.feature_names = joblib.load(os.path.join(model_dir, 'demand_feature_names.pkl'))
+        self.product_encoder = joblib.load(os.path.join(model_dir, 'demand_product_encoder.pkl'))
+        self.store_encoder = joblib.load(os.path.join(model_dir, 'demand_store_encoder.pkl'))
+        self.season_encoder = joblib.load(os.path.join(model_dir, 'demand_season_encoder.pkl'))
+        print(f"Demand model loaded successfully from '{model_dir}/'")
     def __init__(self):
         """
         Initializes the model with more aggressive hyperparameters to combat overfitting.
