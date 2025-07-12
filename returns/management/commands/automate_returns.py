@@ -1,167 +1,190 @@
 from django.core.management.base import BaseCommand
-from returns.models import ReturnRequest, ReturnAction, Store
-import os
-import joblib
-import random
+from returns.models import ReturnRequest, ReturnAction
+from django.db import transaction, connection
+from returns.ml_utils import predict_classification, predict_demand
 
-# Set up the path to the ml_models directory (at project root)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_DIR = os.path.join(BASE_DIR, 'models')
-
-# --- REAL MODEL LOADING (comment out if using mock) ---
-# demand_model = joblib.load(os.path.join(MODEL_DIR, 'demand_model.pkl'))
-# profit_model = joblib.load(os.path.join(MODEL_DIR, 'profit_model.pkl'))
-# label_encoders = joblib.load(os.path.join(MODEL_DIR, 'label_encoders.pkl'))
-# feature_columns = joblib.load(os.path.join(MODEL_DIR, 'feature_columns.pkl'))
-# scaler = joblib.load(os.path.join(MODEL_DIR, 'scaler.pkl'))
-
-# --- MOCK DEMAND MODEL (active for MVP/demo) ---
-def mock_demand_model(product_id, store_location, date):
-    demand = random.uniform(6, 10)
-    profit = round(random.uniform(2, 20), 2)
-    from returns.models import Store
-    all_stores = list(Store.objects.all())
-    if all_stores:
-        best_store = random.choice(all_stores).location
-    else:
-        best_store = store_location
-    print(f"[MOCK] product_id: {product_id}, store_location: {store_location}, date: {date} -> demand: {demand}, profit: {profit}, best_store: {best_store}")
-    return demand, best_store, profit
+MIN_DEMAND = 4.0
+MIN_PROFIT = 1.0
+MIN_CONFIDENCE = 0.7  # Confidence threshold for refurbish/recycle
 
 class Command(BaseCommand):
-    help = 'Automate return processing using ML models for restock, and rule-based for others'
+    help = 'Automate return processing using ML models and business rules'
 
-    def handle(self, *args, **kwargs):
+    @transaction.atomic
+    def handle(self, *args, **options):
         restock_action = ReturnAction.objects.filter(name__iexact='Restock').first()
         refurbish_action = ReturnAction.objects.filter(name__iexact='Refurbish').first()
         recycle_action = ReturnAction.objects.filter(name__iexact='Recycle').first()
-        MIN_CONFIDENCE = 1      # On a scale of 10
-        MIN_PROFIT = 0.0        # In dollars
 
-        for req in ReturnRequest.objects.all():
-            # 1. Check for missing prediction or confidence
-            if not req.predicted_action or req.confidence_score is None:
-                req.auto_processed = False
-                req.manual_review_flag = True
-                req.manual_review_reason = "Missing AI prediction or confidence"
-                req.save()
-                continue
+        pending_requests = ReturnRequest.objects.filter(status='pending')
 
-            # 2. Low confidence (scale of 10)
-            if req.confidence_score < MIN_CONFIDENCE:
-                req.auto_processed = False
-                req.manual_review_flag = True
-                req.manual_review_reason = f"Low confidence ({req.confidence_score}/10)"
-                req.save()
-                continue
+        for req in pending_requests:
+            print(f"\n--- Processing ReturnRequest {req.id} ---")
+            print(f"Product ID: {req.product_id}, Store ID: {req.store_id}, Reason ID: {req.reason_id}")
+            print(f"Inspector Notes: {getattr(req, 'inspector_notes', '')}")
+            print(f"Return Reason: {getattr(req, 'return_reason', '')}")
 
-            # 3. (Attachment check removed for MVP)
+            # 1. Run classification model
+            predicted_action_name, confidence = predict_classification(req)
+            print(f"Predicted Action: {predicted_action_name}, Confidence: {confidence}")
 
-            # 4. Restock: use MOCK DEMAND MODEL for MVP/demo
-            if req.predicted_action == restock_action:
-                # --- MOCK MODEL (active for MVP) ---
-                demand, best_store, profit = mock_demand_model(req.product.id, req.store.location, req.created_at.date())
-                req.demand_score = demand
-                req.profit = profit
-                req.recommended_store = Store.objects.filter(location=best_store).first() or req.store
-                if demand > 4 and profit > 1:
-                    req.auto_processed = True
-                    req.manual_review_flag = False
-                    req.manual_review_reason = None
-                    req.status = 'reviewed'  # <--- Add this line!
-                else:
+            req.predicted_action = ReturnAction.objects.filter(name__iexact=predicted_action_name).first()
+            req.confidence_score = confidence
+
+            # 2. Restock: business rules
+            if predicted_action_name.lower() == 'restock':
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT * FROM demands
+                        WHERE product_id = %s AND store_id = %s
+                        LIMIT 1
+                    """, [req.product_id, req.store_id])
+                    row = cursor.fetchone()
+                    columns = [col[0] for col in cursor.description]
+                    if row:
+                        demand_row = dict(zip(columns, row))
+                    else:
+                        cursor.execute("""
+                            SELECT * FROM demands
+                            WHERE product_id = %s
+                            LIMIT 1
+                        """, [req.product_id])
+                        row = cursor.fetchone()
+                        demand_row = dict(zip(columns, row)) if row else None
+
+                if not demand_row:
+                    print("No demand data found. Sending to manual review.")
                     req.auto_processed = False
                     req.manual_review_flag = True
-                    req.manual_review_reason = f"Demand ({demand}) or profit (${profit}) too low"
-                    req.status = 'pending'  # or keep as 'pending'
-                req.save()
-                self.stdout.write(self.style.SUCCESS(
-                    f"Auto-processed ReturnRequest {req.id}: restock (profit ${profit})"
-                ))
-                continue
-
-                # --- REAL MODEL CODE (uncomment to use real model) ---
-                # fixed_store_location = "Denver_CO"
-                # input_dict = {
-                #     'product_id': req.product.id,
-                #     'date': str(req.created_at.date()),
-                #     'store_location': fixed_store_location,
-                # }
-                # for col, encoder in label_encoders.items():
-                #     if col in input_dict:
-                #         input_dict[col] = encoder.transform([input_dict[col]])[0]
-                # input_list = [input_dict[col] for col in feature_columns]
-                # input_scaled = scaler.transform([input_list])
-                # demand = demand_model.predict(input_scaled)[0]
-                # profit = profit_model.predict(input_scaled)[0]
-                # req.demand_score = demand
-                # req.logistics_cost = None
-                # req.item_value = req.product.item_value or 0
-                # if profit < MIN_PROFIT:
-                #     req.auto_processed = False
-                #     req.manual_review_flag = True
-                #     req.manual_review_reason = f"Not profitable to restock (profit ${profit})"
-                #     req.save()
-                #     continue
-                # req.recommended_store = Store.objects.filter(location=fixed_store_location).first() or req.store
-                # req.auto_action_type = "restock"
-                # req.auto_processed = True
-                # req.manual_review_flag = False
-                # req.manual_review_reason = None
-                # req.save()
-                # self.stdout.write(self.style.SUCCESS(
-                #     f"Auto-processed ReturnRequest {req.id}: restock (profit ${profit})"
-                # ))
-                # continue
-
-            # 5. Refurbish: assign refurbish center (rule-based)
-            elif req.predicted_action == refurbish_action:
-                req.auto_action_type = "refurbish"
-                req.recommended_store = Store.objects.last()  # Simulate refurbish center
-                req.auto_processed = True
-                req.manual_review_flag = False
-                req.manual_review_reason = None
-                req.status = 'reviewed'  # <--- Add this line!
-                req.save()
-                self.stdout.write(self.style.SUCCESS(
-                    f"Auto-processed ReturnRequest {req.id}: refurbish"
-                ))
-                continue
-
-            # 6. Recycle: assign recycling location (rule-based)
-            elif req.predicted_action == recycle_action:
-                req.auto_action_type = "recycle"
-                req.recommended_store = Store.objects.first()  # Simulate recycling location
-                req.auto_processed = True
-                req.manual_review_flag = False
-                req.manual_review_reason = None
-                req.status = 'reviewed'  # <--- Add this line!
-                req.save()
-                self.stdout.write(self.style.SUCCESS(
-                    f"Auto-processed ReturnRequest {req.id}: recycle"
-                ))
-                continue
-
-            # 7. Other actions (Dispose, Resend to Vendor, etc.)
-            else:
-                action_name = req.predicted_action.name.lower().replace(" ", "_")
-                if "vendor" in action_name or action_name not in ["restock", "refurbish", "recycle"]:
-                    req.auto_processed = False
-                    req.manual_review_flag = True
-                    req.manual_review_reason = f"Action '{req.predicted_action.name}' requires manual review"
-                    req.status = 'pending'  # <--- Add this line!
+                    req.manual_review_reason = "No demand data available"
+                    req.status = 'pending'
                     req.save()
                     self.stdout.write(self.style.WARNING(
-                        f"Sent ReturnRequest {req.id} to manual review: {req.predicted_action.name}"
+                        f"ReturnRequest {req.id}: No demand data, sent to manual review."
                     ))
                     continue
-                else:
-                    req.auto_action_type = action_name
+
+                try:
+                    req.demand_score = predict_demand(req, demand_row)
+                    print(f"Demand Score: {req.demand_score}")
+                except Exception as e:
+                    print(f"Error running demand model: {e}")
+                    req.demand_score = None
+
+                profit = float(demand_row.get('profit_margin', 0))
+                req.profit = profit
+                print(f"Profit: {profit}")
+
+                if req.demand_score is not None and req.demand_score > MIN_DEMAND and profit > MIN_PROFIT:
                     req.auto_processed = True
                     req.manual_review_flag = False
                     req.manual_review_reason = None
-                    req.status = 'reviewed'  # <--- Add this line!
-                    req.save()
+                    req.status = 'reviewed'
+                    req.auto_action_type = 'restock'
+                    print("Auto-processed (restock)")
                     self.stdout.write(self.style.SUCCESS(
-                        f"Auto-processed ReturnRequest {req.id}: {req.auto_action_type}"
+                        f"Auto-processed ReturnRequest {req.id}: restock (demand {req.demand_score}, profit {profit})"
                     ))
+                else:
+                    req.auto_processed = False
+                    req.manual_review_flag = True
+                    req.manual_review_reason = f"Demand ({req.demand_score}) or profit ({profit}) too low"
+                    req.status = 'pending'
+                    print("Sent to manual review (restock)")
+                    self.stdout.write(self.style.WARNING(
+                        f"ReturnRequest {req.id}: restock failed business rules, sent to manual review."
+                    ))
+                req.save()
+                continue
+
+            # 3. Refurbish: confidence check + profit
+            elif predicted_action_name.lower() == 'refurbish':
+                # Fetch profit from demands table
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT * FROM demands
+                        WHERE product_id = %s AND store_id = %s
+                        LIMIT 1
+                    """, [req.product_id, req.store_id])
+                    row = cursor.fetchone()
+                    columns = [col[0] for col in cursor.description]
+                    if row:
+                        demand_row = dict(zip(columns, row))
+                        req.profit = float(demand_row.get('profit_margin', 0))
+                    else:
+                        req.profit = 0
+                print(f"Profit: {req.profit}")
+
+                if confidence is not None and confidence < MIN_CONFIDENCE:
+                    req.auto_processed = False
+                    req.manual_review_flag = True
+                    req.manual_review_reason = f"Low confidence ({confidence:.2f}) for refurbish"
+                    req.status = 'pending'
+                    print("Sent to manual review (refurbish, low confidence)")
+                    self.stdout.write(self.style.WARNING(
+                        f"ReturnRequest {req.id}: refurbish, low confidence, sent to manual review."
+                    ))
+                else:
+                    req.auto_processed = True
+                    req.manual_review_flag = False
+                    req.manual_review_reason = None
+                    req.status = 'reviewed'
+                    req.auto_action_type = 'refurbish'
+                    print("Auto-processed (refurbish)")
+                    self.stdout.write(self.style.SUCCESS(
+                        f"Auto-processed ReturnRequest {req.id}: refurbish"
+                    ))
+                req.save()
+                continue
+
+            # 4. Recycle: confidence check + profit
+            elif predicted_action_name.lower() == 'recycle':
+                # Fetch profit from demands table
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT * FROM demands
+                        WHERE product_id = %s AND store_id = %s
+                        LIMIT 1
+                    """, [req.product_id, req.store_id])
+                    row = cursor.fetchone()
+                    columns = [col[0] for col in cursor.description]
+                    if row:
+                        demand_row = dict(zip(columns, row))
+                        req.profit = float(demand_row.get('profit_margin', 0))
+                    else:
+                        req.profit = 0
+                print(f"Profit: {req.profit}")
+
+                if confidence is not None and confidence < MIN_CONFIDENCE:
+                    req.auto_processed = False
+                    req.manual_review_flag = True
+                    req.manual_review_reason = f"Low confidence ({confidence:.2f}) for recycle"
+                    req.status = 'pending'
+                    print("Sent to manual review (recycle, low confidence)")
+                    self.stdout.write(self.style.WARNING(
+                        f"ReturnRequest {req.id}: recycle, low confidence, sent to manual review."
+                    ))
+                else:
+                    req.auto_processed = True
+                    req.manual_review_flag = False
+                    req.manual_review_reason = None
+                    req.status = 'reviewed'
+                    req.auto_action_type = 'recycle'
+                    print("Auto-processed (recycle)")
+                    self.stdout.write(self.style.SUCCESS(
+                        f"Auto-processed ReturnRequest {req.id}: recycle"
+                    ))
+                req.save()
+                continue
+
+            # 5. Other actions/manual review
+            else:
+                req.auto_processed = False
+                req.manual_review_flag = True
+                req.manual_review_reason = f"Action '{predicted_action_name}' requires manual review"
+                req.status = 'pending'
+                req.save()
+                print(f"Sent to manual review (action: {predicted_action_name})")
+                self.stdout.write(self.style.WARNING(
+                    f"ReturnRequest {req.id}: action '{predicted_action_name}' sent to manual review."
+                ))
