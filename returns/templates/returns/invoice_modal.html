@@ -1,0 +1,94 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-xl p-8 max-w-md w-full relative animate-fade-in mx-4">
+        <!-- Close Button -->
+        <button onclick="document.getElementById('invoice-modal').style.display='none'" 
+                class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors" 
+                aria-label="Close">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <!-- Modal Header -->
+        <div class="mb-6 border-b border-gray-100 pb-4 flex items-center space-x-3">
+            <div class="bg-indigo-50 rounded-lg p-2">
+                <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h2 class="text-xl font-medium text-gray-900">Return Invoice</h2>
+        </div>
+
+        <!-- Invoice Details -->
+        <div class="space-y-4">
+            <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-600">Invoice ID</span>
+                    <span class="font-mono text-sm font-medium text-indigo-600">{{ invoice_id }}</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div class="space-y-1">
+                        <span class="text-sm text-gray-500">Product Name</span>
+                        <p class="text-sm font-medium text-gray-900">{{ product_name }}</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div class="space-y-1">
+                        <span class="text-sm text-gray-500">Shipping Location</span>
+                        <p class="text-sm font-medium text-gray-900">{{ shipping_location }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
+                    <div class="space-y-1">
+                        <span class="text-sm text-emerald-600">Predicted Profit</span>
+                        <p class="text-lg font-medium text-emerald-700">
+                            {% if profit is not None %}
+                                ${{ profit|floatformat:"2" }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <div class="space-y-1">
+                        <span class="text-sm text-amber-600">Demand Score</span>
+                        <p class="text-lg font-medium text-amber-700">
+                            {% if demand_score is not None %}
+                                {{ demand_score|floatformat:"0" }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="mt-8 flex justify-end">
+            <button onclick="document.getElementById('invoice-modal').style.display='none'" 
+                    class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium ring-1 ring-gray-900/5">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(20px);}
+    to { opacity: 1; transform: translateY(0);}
+}
+.animate-fade-in {
+    animation: fade-in 0.3s ease;
+}
+</style>
