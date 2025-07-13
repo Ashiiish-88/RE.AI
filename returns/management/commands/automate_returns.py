@@ -5,7 +5,7 @@ from returns.ml_utils import predict_classification, predict_demand
 
 MIN_DEMAND = 4.0
 MIN_PROFIT = 1.0
-MIN_CONFIDENCE = 0.7  # Confidence threshold for refurbish/recycle
+MIN_CONFIDENCE = 0.2  # Confidence threshold for refurbish/recycle
 
 class Command(BaseCommand):
     help = 'Automate return processing using ML models and business rules'
