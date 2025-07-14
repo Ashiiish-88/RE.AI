@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ RE.AI - Returns Management Platform
+# ⚡ RE.AI - Intelligent Returns Management Platform
 
 A sophisticated Django-based returns management platform that leverages advanced analytics to optimize product return decisions through demand forecasting, profitability analysis, and location optimization.
 
